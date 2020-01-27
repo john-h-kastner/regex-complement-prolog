@@ -85,32 +85,118 @@ parse_regex(S, R) :-
 
 # Converting Regular Expressions to NFA
 
+We now need to transform the abstract syntax tree of regular expression into a
+NFA which can be done using [Thompson's construction][2]. While we do not use
+the exact same construction, the intuition is identical. 
+
+Before implementing the construction, we need a way to obtain unique
+identifiers for states in the NFA. We can do this by assigning the first state
+to be `0` and incrementing the identifier for each subsequent state. In an
+imperative language, the current value of the identifier might be tracked in a
+global variable or local variable outside the body of a loop. A global variable
+could be used in Prolog, but it is not desirable. Instead, we can opt for an
+approach similar what would be used in the functional paradigm: a function
+takes as part of its input the current identifier value, and returns with its
+output and additional value for the next available identifier. The problem with
+this approach is that we explicitly thread some state though the program. To
+avoid this overhead, something similar to the state monad in Haskell can be
+used.
+
+In Prolog, the state monad is approximated using a DCG. The current identifier
+value is tracked as the first and only element of the list being processed.
+When an identifier is needed, the value is removed from the list, incremented,
+and added back onto the list. The original value can then be used as an
+identifier. The DCG predicate `fresh//1` handles the list updates and unifies
+its argument with the available identifier value.
+
 ```{.prolog file=regex.pl}
 fresh(S), [T] -->
   [S], {T is S + 1}.
+```
 
-regex_nfa(regex_char(C), NFA) -->
-  fresh(A), fresh(B),
-  {NFA = nfa{states: [A, B], initial: A, final: B, delta: [A-C-B]}}.
+To implement the construction, we also need some data structure to represent
+an NFA. Recall that an NFA is [defined by a 5-tuple][3]
+$(Q, \Sigma, \Delta, q_0, f)$: a set of states, an alphabet, a transition
+function, and initial state, and a final state. We are working with a fixed
+alphabet ($\{0,1\}$), so we will ignore $\Sigma$ and encode the remaining four
+elements in a dictionary defined as follows. Note that the transition function
+is defined by a set of triples rather than a function.
 
+```{.prolog file=regex.pl}
+is_nfa(nfa{states: _, initial: _, final: _, delta: DS}) :-
+  forall(member(D, DS), is_delta(D)).
+
+is_delta(__From-__Char-__To).
+```
+
+The two simplest regular expressions are the empty regular expression and the
+null regular expression. NFA constructed for the empty regular expression is
+an NFA with exactly one state that is both the initial and the final state
+(no transitions are required). An identifier for this state is obtained by
+unifying `A` in `fresh//1`.
+
+```{.prolog file=regex.pl}
 regex_nfa(regex_empty, NFA) -->
   fresh(A),
   {NFA = nfa{states: [A], initial: A, final: A, delta: []}}.
+```
 
+The null regex does not accept any strings, so there should be not way to move
+from the initial state to the final state. This is encoded by obtaining two
+state identifiers for the initial and final state while not generating any
+transitions between them.
+
+```{.prolog file=regex.pl}
 regex_nfa(regex_null, NFA) -->
   fresh(A), fresh(B),
-  {NFA = nfa{states: [A], initial: A, final: B, delta: []}}.
+  {NFA = nfa{states: [A, B], initial: A, final: B, delta: []}}.
+```
 
+A character literal regex follows very directly from this. Instead of there
+being no path from `A` to `B`, there should be single path that requires
+transitioning on the character in question.
+
+```{.prolog file=regex.pl}
+regex_nfa(regex_char(C), NFA) -->
+  fresh(A), fresh(B),
+  {NFA = nfa{states: [A, B], initial: A, final: B, delta: [A-C-B]}}.
+```
+
+The following three cases are somewhat more complicate since they require
+integrating one or more existing NFA into a new NFA. In all cases we first
+obtain NFA for the sub-expressions for the input regular expression with 
+recursive calls to `regex_nfa//2`.
+
+To construct the NFA for a union of two regular expression, we need to
+construct the union of the sub-expressions NFA. To do this, we first obtain
+two fresh states for the resulting NFA: one for the initial state (`I`) and one
+for the final state (`F`). Transitions are then required between the new states
+and the existing NFA. From the initial state, there must be a transitions on
+the empty string ($\varepsilon$, written here as `e`) to the initial state
+of both NFA. From the final state of both NFA, there must be a transitions on
+$\varepsilon$ to the new final state. The states and transitions for the final
+NFA are the union of these new states and transitions with all existing states
+and transitions from both NFA.
+
+```{.prolog file=regex.pl}
 regex_nfa(regex_union(L, R), NFA) -->
+  fresh(I),
   regex_nfa(L, NFA_L),
   regex_nfa(R, NFA_R),
-  fresh(I), fresh(F),
+  fresh(F),
   {append([NFA_L.states, NFA_R.states, [I, F]], States),
    Delta_I = [I-e-NFA_L.initial, I-e-NFA_R.initial],
    Delta_F = [NFA_L.final-e-F, NFA_R.final-e-F],
    append([Delta_F, Delta_I, NFA_L.delta, NFA_R.delta], Delta),
    NFA = nfa{states: States, initial: I, final: F, delta: Delta}}.
+```
 
+For a concatenation, we do not need any new states. The new initial state is
+the initial state of the left NFA while the new final states is the final state
+of the right NFA. A transitions on $\varepsilon$ is then required between the
+final state of the left NFA and the initial state of the right NFA.
+
+```{.prolog file=regex.pl}
 regex_nfa(regex_concat(L, R), NFA) -->
   regex_nfa(L, NFA_L),
   regex_nfa(R, NFA_R),
@@ -119,7 +205,21 @@ regex_nfa(regex_concat(L, R), NFA) -->
    append([Delta_M, NFA_L.delta, NFA_R.delta], Delta),
    I = NFA_L.initial, F = NFA_R.final,
    NFA = nfa{states: States, initial: I, final: F, delta: Delta}}.
+```
 
+As in the previews cases, constructing the NFA for a Kleene closure requires
+first constructing the NFA for a sub-expression. Since a Kleene closure can
+satisfy the regex once, the initial and final states of this NFA should not be
+changed. We will add transitions so that the expression can be satisfied more
+than one time or zero times. Satisfying the expression zero times is the same
+as skipping over the recursively constructed NFA entirely. We encode this
+possibility by adding a transition on $\varepsilon$ from the initial state to
+the final state. To satisfy the expression more than once, we should be able to
+return to the state initial state after reaching the final state. This is
+encoded by an $\varepsilon$ transition from the final state to the initial
+state.
+
+```{.prolog file=regex.pl}
 regex_nfa(regex_kleene(K), NFA) -->
   regex_nfa(K, NFA_K),
   {Delta_K = [NFA_K.initial-e-NFA_K.final, NFA_K.final-e-NFA_K.initial],
@@ -231,3 +331,5 @@ graphviz_display(NFA) :-
 ```
 
 [1]: https://codegolf.stackexchange.com/questions/161108/complement-of-a-regex
+[2]: https://en.wikipedia.org/wiki/Thompson%27s_construction
+[3]: https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton#Formal_definition
