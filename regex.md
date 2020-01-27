@@ -105,7 +105,7 @@ regex_nfa(regex_union(L, R), NFA) -->
   regex_nfa(L, NFA_L),
   regex_nfa(R, NFA_R),
   fresh(I), fresh(F),
-  {append(NFA_L.states, NFA_R.states, States),
+  {append([NFA_L.states, NFA_R.states, [I, F]], States),
    Delta_I = [I-e-NFA_L.initial, I-e-NFA_R.initial],
    Delta_F = [NFA_L.final-e-F, NFA_R.final-e-F],
    append([Delta_F, Delta_I, NFA_L.delta, NFA_R.delta], Delta),
@@ -130,6 +130,42 @@ regex_nfa(regex_kleene(K), NFA) -->
 
 # Converting NFA to DFA
 
+```{.prolog file=regex.pl}
+
+epsilon_close(_,S,S).
+epsilon_close(Delta, S, E) :-
+  select(S-e-T, Delta, Delta2),
+
+  % Not stricly required, but this eliminates
+  % duplicate results
+  findall(E,(member(E,Delta2), E=_-e-S), Del),
+  subtract(Delta2, Del, Delta3),
+
+  epsilon_close(Delta3, T, E).
+
+new_transition(States, Delta, States-D-TS) :-
+  member(D, [0, 1]),
+  setof(S, T^F^(member(F,States), member(F-D-T, Delta), epsilon_close(Delta, T, S)), TS).
+
+expand_state(State, Delta, NewState) :-
+  member(D, [0, 1]),
+  setof(E, S^N^(member(S, State), member(S-D-N, Delta), epsilon_close(Delta, N, E)), NewState).
+
+new_states(States, Delta, AllStates) :-
+  setof(E, S^(member(S, States), expand_state(S, Delta, E)), Expanded),
+  subtract(Expanded, States, New), (
+    New = [], AllStates = States;
+    New = [_|_], union(States, New, Union), new_states(Union, Delta, AllStates)
+  ).
+
+nfa_dfa(NFA, DFA) :-
+  DFA = dfa{states: States, initial: I, final: F, delta: Delta},
+  setof(S, epsilon_close(NFA.delta, NFA.initial, S), I),
+  new_states([I], NFA.delta, States),
+  bagof(D, S^(member(S, States), new_transition(S, NFA.delta, D)), Delta),
+  bagof(S, (member(S, States), member(NFA.final, S)), F).
+```
+
 # Complementing DFA
 
 # Converting DFA to Regular Expressions
@@ -137,23 +173,32 @@ regex_nfa(regex_kleene(K), NFA) -->
 # Appendix: Graphiz Output
 
 ```{.prolog file=regex.pl}
+term_codes(T, C) :-
+  term_string(T, TS),
+  string_codes(TS, C).
+
 graphviz_delta(F-D-T, G) :-
-  atom_codes(F, FC),
-  atom_codes(T, TC),
-  atom_codes(D, DC),
-  append([FC, ` -> `, TC, `[ label="`,DC,`"];\n`], G).
+  term_codes(F, FC),
+  term_codes(T, TC),
+  term_codes(D, DC),
+  append([`"`,FC, `" -> "`, TC, `" [ label="`,DC,`"];\n`], G).
+
+graphviz_finals(F, FS) :-
+  (is_list(F), !, FL = F;
+   FL = [F]),
+   maplist(graphviz_final, FL, FSS), append(FSS, FS).
 
 graphviz_final(F, FS) :-
-  atom_codes(F, FC),
-  append([FC, ` [shape=doublecircle];\n`], FS).
+  term_codes(F, FC),
+  append([`"`, FC, `" [shape=doublecircle];\n`], FS).
 
 graphviz_initial(I, IS) :-
-  atom_codes(I, IC),
-  append([IC, ` [shape=diamond];\n`], IS).
+  term_codes(I, IC),
+  append([`"`, IC, `" [shape=diamond];\n`], IS).
 
 graphviz(NFA, G) :-
   maplist(graphviz_delta, NFA.delta, GS),
-  graphviz_final(NFA.final, FS),
+  graphviz_finals(NFA.final, FS),
   graphviz_initial(NFA.initial, IS),
   append([[`digraph {\n`, FS, `\n`, IS], GS, [`}\n`]], GSS),
   append(GSS, G).
