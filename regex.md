@@ -245,14 +245,17 @@ epsilon_close(Delta, S, E) :-
 
 new_transition(States, Delta, States-D-TS) :-
   member(D, [0, 1]),
-  setof(S, T^F^(member(F,States), member(F-D-T, Delta), epsilon_close(Delta, T, S)), TS).
+  setof(S, T^F^(
+    member(F,States),
+    member(F-D-T, Delta),
+    epsilon_close(Delta, T, S)
+  ), TS).
 
-expand_state(State, Delta, NewState) :-
-  member(D, [0, 1]),
-  setof(E, S^N^(member(S, State), member(S-D-N, Delta), epsilon_close(Delta, N, E)), NewState).
+new_state(States, Delta, New) :-
+  new_transition(States, Delta, _-_-New).
 
 new_states(States, Delta, AllStates) :-
-  setof(E, S^(member(S, States), expand_state(S, Delta, E)), Expanded),
+  setof(E, S^(member(S, States), new_state(S, Delta, E)), Expanded),
   subtract(Expanded, States, New), (
     New = [], AllStates = States;
     New = [_|_], union(States, New, Union), new_states(Union, Delta, AllStates)
