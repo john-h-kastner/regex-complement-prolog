@@ -297,7 +297,8 @@ graphviz_final(F, FS) :-
 
 graphviz_initial(I, IS) :-
   term_codes(I, IC),
-  append([`"`, IC, `" [shape=diamond];\n`], IS).
+  append([`initial [label="", shape=none, height=.0,width=.0];\n`,
+         `initial -> "`, IC, `";`], IS).
 
 graphviz(NFA, G) :-
   maplist(graphviz_delta, NFA.delta, GS),
