@@ -284,6 +284,31 @@ dfa_complement(DFA, Complement) :-
 
 # Converting DFA to Regular Expressions
 
+```{.prolog file=regex.pl}
+
+dfa_regex(DFA, -1, I, J, RE) :-
+  (I = J ->
+    Base = regex_empty;
+    Base = regex_null),
+  nth0(I, DFA.states, QI),
+  nth0(J, DFA.states, QJ),
+  setof(R, C^(
+    member(C, [0, 1]),
+    (member(QI-C-QJ, DFA.delta) ->
+      R = regex_char(C);
+      R = regex_null)
+  ), RES),
+  foldl([V0, E, V1]>>(V1=regex_union(V0, E)), RES, Base, RE).
+
+dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene(R_KK), R_KJ)), R_IJ)) :-
+  K > -1,
+  Pred_K is K - 1,
+  dfa_regex(DFA, Pred_K, I, K, R_IK),
+  dfa_regex(DFA, Pred_K, K, K, R_KK),
+  dfa_regex(DFA, Pred_K, K, J, R_KJ),
+  dfa_regex(DFA, Pred_K, I, J, R_IJ).
+```
+
 # Appendix: Graphiz Output
 
 ```{.prolog file=regex.pl}
