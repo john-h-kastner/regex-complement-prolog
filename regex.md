@@ -245,11 +245,11 @@ epsilon_close(Delta, S, E) :-
 
 new_transition(States, Delta, States-D-TS) :-
   member(D, [0, 1]),
-  setof(S, T^F^(
+  (setof(S, T^F^(
     member(F,States),
     member(F-D-T, Delta),
     epsilon_close(Delta, T, S)
-  ), TS).
+  ), TS) -> true ; TS=[]).
 
 new_state(States, Delta, New) :-
   new_transition(States, Delta, _-_-New).
