@@ -271,6 +271,17 @@ nfa_dfa(NFA, DFA) :-
 
 # Complementing DFA
 
+```{.prolog file=regex.pl}
+dfa_complement(DFA, Complement) :-
+  Complement = dfa{
+    states: DFA.states,
+    initial: DFA.initial,
+    delta: DFA.delta,
+    final: Final
+  },
+  subtract(DFA.states, DFA.final, Final).
+```
+
 # Converting DFA to Regular Expressions
 
 # Appendix: Graphiz Output
