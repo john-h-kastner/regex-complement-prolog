@@ -313,6 +313,42 @@ dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene
   dfa_regex(DFA, Pred_K, K, K, R_KK),
   dfa_regex(DFA, Pred_K, K, J, R_KJ),
   dfa_regex(DFA, Pred_K, I, J, R_IJ).
+
+
+simpl_regex(regex_union(A,B), C) :-
+  simpl_regex(A, C),
+  simpl_regex(B, C),!.
+simpl_regex(regex_concat(E,A), B) :-
+  simpl_regex(E, regex_empty),
+  simpl_regex(A, B),!.
+simpl_regex(regex_concat(A,E), B) :-
+  simpl_regex(E, regex_empty),
+  simpl_regex(A, B),!.
+simpl_regex(regex_union(A,N), B) :-
+  simpl_regex(N, regex_null),
+  simpl_regex(A,B),!.
+simpl_regex(regex_union(N,A), B) :-
+  simpl_regex(N, regex_null),
+  simpl_regex(A,B),!.
+simpl_regex(regex_concat(_,N), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_concat(N,_), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_kleene(E), regex_empty) :-
+  simpl_regex(E, regex_empty),!.
+simpl_regex(regex_kleene(N), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_kleene(K), regex_kleene(L)) :-
+  simpl_regex(K, L).
+simpl_regex(regex_concat(A,B), regex_concat(C,D)) :-
+  simpl_regex(A,C),
+  simpl_regex(B,D).
+simpl_regex(regex_union(A,B), regex_union(C,D)) :-
+  simpl_regex(A,C),
+  simpl_regex(B,D).
+simpl_regex(regex_null, regex_null).
+simpl_regex(regex_empty, regex_empty).
+simpl_regex(regex_char(C), regex_char(C)).
 ```
 
 # Appendix: Graphiz Output
