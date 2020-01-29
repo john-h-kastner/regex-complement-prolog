@@ -230,6 +230,9 @@ regex_nfa(regex_kleene(K), NFA) -->
 
 # Converting NFA to DFA
 
+We use the usual [powerset construction][4] to convert NFA to DFA. The exact
+implementation is modified to only construct reachable states.
+
 ```{.prolog file=regex.pl}
 
 epsilon_close(_,S,S).
@@ -283,6 +286,9 @@ dfa_complement(DFA, Complement) :-
 ```
 
 # Converting DFA to Regular Expressions
+
+We convert a complemented DFA into a regular expression using 
+[Kleene's Algorithm][5].
 
 ```{.prolog file=regex.pl}
 
@@ -373,3 +379,5 @@ graphviz_display(NFA) :-
 [1]: https://codegolf.stackexchange.com/questions/161108/complement-of-a-regex
 [2]: https://en.wikipedia.org/wiki/Thompson%27s_construction
 [3]: https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton#Formal_definition
+[4]: https://en.wikipedia.org/wiki/Powerset_construction
+[5]: https://en.wikipedia.org/wiki/Kleene%27s_algorithm
