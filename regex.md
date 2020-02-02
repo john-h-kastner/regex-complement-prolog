@@ -20,6 +20,22 @@ The approach we will use is as follows:
 4. Complement the DFA. This is accomplished by complementing the set of
    accepting states.
 5. Convert the resulting DFA into a regular expression.
+6. (Optional) Perform some simplification to obtain a more reasonable expression
+
+This is demonstrated by the following predicate that takes a regular expression
+encoded as a string and generates its complement. The predicates invoked in its
+
+```{.prolog file=regex.pl}
+complement_regex_string(Regex_String, Regex_Comp_String) :-
+  string_codes(Regex_String, Regex_Codes),
+  parse_regex(Regex_Codes, Regex),
+  regex_nfa(Regex, NFA),
+  nfa_dfa(NFA, DFA),
+  dfa_complement(DFA, DFA_Comp),
+  dfa_regex(DFA_Comp, Regex_Comp),
+  show_regex(Regex_Comp, Regex_Comp_Codes),
+  string_codes(Regex_Comp_String, Regex_Comp_Codes).
+```
 
 # Parsing Regular Expressions
 
@@ -228,6 +244,15 @@ regex_nfa(regex_kleene(K), NFA) -->
    NFA = nfa{states: NFA_K.states, initial: I, final: F, delta: Delta}}.
 ```
 
+
+Since invoking the DCG predicate we have defined requires providing two
+implicit parameters, it is convenient to define an additional predicate
+that can be invoked directly.
+
+```{.prolog file=regex.pl}
+regex_nfa(Regex, NFA) :-
+  regex_nfa(Regex, NFA, [0], _).
+```
 # Converting NFA to DFA
 
 We use the usual [powerset construction][4] to convert NFA to DFA. The exact
@@ -292,10 +317,10 @@ We convert a complemented DFA into a regular expression using
 
 ```{.prolog file=regex.pl}
 
+fold_union(Regex_List, Union) :-
+  foldl([V0, E, V1]>>(V1=regex_union(V0, E)), Regex_List, regex_null, Union).
+
 dfa_regex(DFA, -1, I, J, RE) :-
-  (I = J ->
-    Base = regex_empty;
-    Base = regex_null),
   nth0(I, DFA.states, QI),
   nth0(J, DFA.states, QJ),
   setof(R, C^(
@@ -304,7 +329,9 @@ dfa_regex(DFA, -1, I, J, RE) :-
       R = regex_char(C);
       R = regex_null)
   ), RES),
-  foldl([V0, E, V1]>>(V1=regex_union(V0, E)), RES, Base, RE).
+  (I = J ->
+    fold_union([regex_empty|RES], RE);
+    fold_union(RES, RE)).
 
 dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene(R_KK), R_KJ)), R_IJ)) :-
   K > -1,
@@ -314,6 +341,15 @@ dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene
   dfa_regex(DFA, Pred_K, K, J, R_KJ),
   dfa_regex(DFA, Pred_K, I, J, R_IJ).
 
+dfa_regex(DFA, Regex) :-
+  length(DFA.states, L), K is L - 1,
+  nth0(I, DFA.states, DFA.initial),
+  findall(Regex_F, (
+    member(Final, DFA.final),
+    nth0(J, DFA.states, Final),
+    dfa_regex(DFA, K, I, J, Regex_F)
+  ), Regex_List),
+  fold_union(Regex_List, Regex).
 
 simpl_regex(regex_union(A,B), C) :-
   simpl_regex(A, C),
@@ -349,6 +385,19 @@ simpl_regex(regex_union(A,B), regex_union(C,D)) :-
 simpl_regex(regex_null, regex_null).
 simpl_regex(regex_empty, regex_empty).
 simpl_regex(regex_char(C), regex_char(C)).
+
+show_regex(regex_empty) --> `_`.
+show_regex(regex_null) --> `!`.
+show_regex(regex_char(C)) --> {atom_codes(C, S)}, S.
+show_regex(regex_union(L,R)) -->
+  `(`, show_regex(L), `|`, show_regex(R), `)`.
+show_regex(regex_concat(L,R)) -->
+  show_regex(L), show_regex(R).
+show_regex(regex_kleene(K)) -->
+  `(`, show_regex(K), `)*`.
+
+show_regex(Regex, Codes) :-
+  show_regex(Regex, Codes, []).
 ```
 
 # Appendix: Graphiz Output
