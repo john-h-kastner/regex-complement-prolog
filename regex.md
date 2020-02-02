@@ -320,6 +320,8 @@ We convert a complemented DFA into a regular expression using
 fold_union(Regex_List, Union) :-
   foldl([V0, E, V1]>>(V1=regex_union(V0, E)), Regex_List, regex_null, Union).
 
+:- table dfa_regex/5.
+
 dfa_regex(DFA, -1, I, J, RE) :-
   nth0(I, DFA.states, QI),
   nth0(J, DFA.states, QJ),
