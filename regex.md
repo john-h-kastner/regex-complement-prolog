@@ -256,19 +256,56 @@ regex_nfa(Regex, NFA) :-
 # Converting NFA to DFA
 
 We use the usual [powerset construction][4] to convert NFA to DFA. The exact
-implementation is modified to only construct reachable states.
+implementation is modified to only construct reachable states. The premise of
+the powerset construction is that the set of states in the constructed DFA is
+powerset of the states in the NFA. In other words, each state within the DFA is
+some subset of the states of the NFA.
+
+Using this new set of states, we also need to determine what state is the
+initial states, what states are final states are final states, and what
+transitions exists between the states.  The new initial state is derived from
+the original initial state by taking the set of all states reachable on
+$\varepsilon$ transitions from the initial states. Finding these reachable
+states for an arbitrary starting state is called the $\varepsilon$ closure of
+the state.  From this initial state, we can find the set of states reachable
+after any number of transitions. This is the set of states in the constructed
+DFA.  The set of final states contains every state in the set of reachable
+states that contains the final state of the original NFA.  Finally, we need the
+transition function between the states in the set of states.
 
 ```{.prolog file=regex.pl}
+nfa_dfa(NFA, DFA) :-
+  DFA = dfa{states: States, initial: I, final: F, delta: Delta},
+  setof(S, epsilon_close(NFA.delta, NFA.initial, S), I),
+  new_states([I], NFA.delta, States),
+  bagof(S, (member(S, States), member(NFA.final, S)), F),
+  bagof(D, S^(member(S, States), new_transition(S, NFA.delta, D)), Delta).
+```
 
+An important step in the above procedure was finding the set of all states
+reachable by any number of $\varepsilon$ transitions from a given set of states
+(states in this context refers to NFA states, so a set of these states is
+equivalent to a singular DFA state).  This is called an $\varepsilon$-closure.
+
+There are two relevant cases when computing the $\varepsilon$-closure. First,
+the closure of a single DFA state contains itself since it can be reached
+after zero $\varepsilon$ transitions. Second, the $\varepsilon$-closure of
+every state reachable after a single epsilon transition is a subset of the
+closure of the original state. Each of these states is in its own
+$\varepsilon$-closure by the first case, so they are in the final closure.
+
+Two special considerations are made when implementing this function. After a
+transition is included in the closure, it is removed from consideration in
+future recursive calls. Additionally, any $\varepsilon$ transitions incident to
+the state included in the closure are removed. These rules ensure that no state
+is visited more than once and that the closure procedure terminates.
+
+```{.prolog file=regex.pl}
 epsilon_close(_,S,S).
 epsilon_close(Delta, S, E) :-
   select(S-e-T, Delta, Delta2),
-
-  % Not stricly required, but this eliminates
-  % duplicate results
   findall(E,(member(E,Delta2), E=_-e-S), Del),
   subtract(Delta2, Del, Delta3),
-
   epsilon_close(Delta3, T, E).
 
 new_transition(States, Delta, States-D-TS) :-
@@ -279,9 +316,6 @@ new_transition(States, Delta, States-D-TS) :-
     epsilon_close(Delta, T, S)
   ), TS) -> true ; TS=[]).
 
-new_state(States, Delta, New) :-
-  new_transition(States, Delta, _-_-New).
-
 new_states(States, Delta, AllStates) :-
   setof(E, S^(member(S, States), new_state(S, Delta, E)), Expanded),
   subtract(Expanded, States, New), (
@@ -289,12 +323,8 @@ new_states(States, Delta, AllStates) :-
     New = [_|_], union(States, New, Union), new_states(Union, Delta, AllStates)
   ).
 
-nfa_dfa(NFA, DFA) :-
-  DFA = dfa{states: States, initial: I, final: F, delta: Delta},
-  setof(S, epsilon_close(NFA.delta, NFA.initial, S), I),
-  new_states([I], NFA.delta, States),
-  bagof(D, S^(member(S, States), new_transition(S, NFA.delta, D)), Delta),
-  bagof(S, (member(S, States), member(NFA.final, S)), F).
+new_state(States, Delta, New) :-
+  new_transition(States, Delta, _-_-New).
 ```
 
 # Complementing DFA
