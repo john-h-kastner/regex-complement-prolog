@@ -278,7 +278,7 @@ nfa_dfa(NFA, DFA) :-
   DFA = dfa{states: States, initial: I, final: F, delta: Delta},
   setof(S, epsilon_close(NFA.delta, NFA.initial, S), I),
   new_states([I], NFA.delta, States),
-  bagof(S, (member(S, States), member(NFA.final, S)), F),
+  findall(S, (member(S, States), member(NFA.final, S)), F),
   bagof(D, S^(member(S, States), new_transition(S, NFA.delta, D)), Delta).
 ```
 
@@ -300,6 +300,10 @@ future recursive calls. Additionally, any $\varepsilon$ transitions incident to
 the state included in the closure are removed. These rules ensure that no state
 is visited more than once and that the closure procedure terminates.
 
+Note that `epsilon_close/3` is written as a predicate to test if a state is in
+the epsilon closure of another state. When the predicate is invoked, it wrapped
+in `setof/3` to collect all states in the closure into a single list.
+
 ```{.prolog file=regex.pl}
 epsilon_close(_,S,S).
 epsilon_close(Delta, S, E) :-
@@ -307,15 +311,39 @@ epsilon_close(Delta, S, E) :-
   findall(E,(member(E,Delta2), E=_-e-S), Del),
   subtract(Delta2, Del, Delta3),
   epsilon_close(Delta3, T, E).
+```
 
+
+To compute the transitions in the final DFA, we start with a state from the DFA
+(a set of NFA states) and the set of transitions in the original DFA. We then
+compute the DFA transitions out of that state using the available NFA
+transitions. Such transitions are constructed by selecting a single NFA
+state from the DFA state and a transition out of this state. The
+$\varepsilon$-closure of the destination of this transitions is the destination
+of the constructed transition while the original DFA state is the source.
+
+```{.prolog file=regex.pl}
 new_transition(States, Delta, States-D-TS) :-
   member(D, [0, 1]),
+  % TODO: this doesn't handle multiple transistions on the same character out
+  % of a single state. Need to add a union somewhere.
   (setof(S, T^F^(
     member(F,States),
     member(F-D-T, Delta),
     epsilon_close(Delta, T, S)
   ), TS) -> true ; TS=[]).
+```
 
+The set of states in the final DFA could be computed by taking the powerset of
+the NFA states; however, this results in many states being included that are
+not reachable after any number of transitions from the initial state of the
+DFA. Instead, the set of states is found by starting with only the initial
+state and progressively adding to the set of known states by adding to the set
+any states that can be transitioned to from any state within the set. This
+expansions is repeated until a fixed point is reached (i.e. no new states are
+discovered).
+
+```{.prolog file=regex.pl}
 new_states(States, Delta, AllStates) :-
   setof(E, S^(member(S, States), new_state(S, Delta, E)), Expanded),
   subtract(Expanded, States, New), (
@@ -328,6 +356,11 @@ new_state(States, Delta, New) :-
 ```
 
 # Complementing DFA
+
+Moving from the string representation of a regex to a DFA took a quite a bit
+of working when all we set out to do was computing its complement. At this
+point taking the complement is fortunately easy. We simply replace the set 
+of final states with its complement.
 
 ```{.prolog file=regex.pl}
 dfa_complement(DFA, Complement) :-
@@ -343,13 +376,14 @@ dfa_complement(DFA, Complement) :-
 # Converting DFA to Regular Expressions
 
 We convert a complemented DFA into a regular expression using 
-[Kleene's Algorithm][5].
+[Kleene's Algorithm][5] which is briefly given by the  following recursive
+relation which is implemented by `dfa_regex/4`.
+
+$$R^{-1}_{ij} = \{\varepsilon \mid i = j\} \cup \bigcup \{\sigma \mid q_j \in \delta(q_i, \sigma) \land \sigma \in \Sigma\}$$
+$$R^k_{ij} = R^{k-1}_{ik} (R^{k-1}_{kk})^* R^{k-1}_{kj} \cup R^{k-1}_{ij}$$
+
 
 ```{.prolog file=regex.pl}
-
-fold_union(Regex_List, Union) :-
-  foldl([V0, E, V1]>>(V1=regex_union(V0, E)), Regex_List, regex_null, Union).
-
 :- table dfa_regex/5.
 
 dfa_regex(DFA, -1, I, J, RE) :-
@@ -372,7 +406,19 @@ dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene
   dfa_regex(DFA, Pred_K, K, K, R_KK),
   dfa_regex(DFA, Pred_K, K, J, R_KJ),
   dfa_regex(DFA, Pred_K, I, J, R_IJ).
+```
 
+The above predicate alone is not enough to convert an NFA to a DFA. The
+predicate find the regex for the language of strings recognized by the DFA
+starting in state $i$, ending in state $j$ and passing through states index
+no higher than $k$. A regex for a DFA with a single final state could be found
+by $R^{\mid Q \mid}_{q_0q_f}$. Since there can be arbitrarily many final states,
+this must be computed for each $q_f \in f$. The final regular expression is the
+union of all computed regular expressions.
+
+$$ R = \bigcup \{R^{\mid Q \mid}_{q_oq_f} | q_f \in f\} $$
+
+```{.prolog file=regex.pl}
 dfa_regex(DFA, Regex) :-
   length(DFA.states, L), K is L - 1,
   nth0(I, DFA.states, DFA.initial),
@@ -383,40 +429,8 @@ dfa_regex(DFA, Regex) :-
   ), Regex_List),
   fold_union(Regex_List, Regex).
 
-simpl_regex(regex_union(A,B), C) :-
-  simpl_regex(A, C),
-  simpl_regex(B, C),!.
-simpl_regex(regex_concat(E,A), B) :-
-  simpl_regex(E, regex_empty),
-  simpl_regex(A, B),!.
-simpl_regex(regex_concat(A,E), B) :-
-  simpl_regex(E, regex_empty),
-  simpl_regex(A, B),!.
-simpl_regex(regex_union(A,N), B) :-
-  simpl_regex(N, regex_null),
-  simpl_regex(A,B),!.
-simpl_regex(regex_union(N,A), B) :-
-  simpl_regex(N, regex_null),
-  simpl_regex(A,B),!.
-simpl_regex(regex_concat(_,N), regex_null) :-
-  simpl_regex(N, regex_null),!.
-simpl_regex(regex_concat(N,_), regex_null) :-
-  simpl_regex(N, regex_null),!.
-simpl_regex(regex_kleene(E), regex_empty) :-
-  simpl_regex(E, regex_empty),!.
-simpl_regex(regex_kleene(N), regex_null) :-
-  simpl_regex(N, regex_null),!.
-simpl_regex(regex_kleene(K), regex_kleene(L)) :-
-  simpl_regex(K, L).
-simpl_regex(regex_concat(A,B), regex_concat(C,D)) :-
-  simpl_regex(A,C),
-  simpl_regex(B,D).
-simpl_regex(regex_union(A,B), regex_union(C,D)) :-
-  simpl_regex(A,C),
-  simpl_regex(B,D).
-simpl_regex(regex_null, regex_null).
-simpl_regex(regex_empty, regex_empty).
-simpl_regex(regex_char(C), regex_char(C)).
+fold_union(Regex_List, Union) :-
+  foldl([V0, E, V1]>>(V1=regex_union(V0, E)), Regex_List, regex_null, Union).
 
 show_regex(regex_empty) --> `_`.
 show_regex(regex_null) --> `!`.
