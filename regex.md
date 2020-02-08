@@ -32,6 +32,7 @@ complement_regex_string(Regex_String, Regex_Comp_String) :-
   regex_nfa(Regex, NFA),
   nfa_dfa(NFA, DFA),
   dfa_complement(DFA, DFA_Comp),
+  graphviz_display(DFA_Comp),
   dfa_regex(DFA_Comp, Regex_Comp),
   show_regex(Regex_Comp, Regex_Comp_Codes),
   string_codes(Regex_Comp_String, Regex_Comp_Codes).
@@ -386,7 +387,7 @@ $$R^k_{ij} = R^{k-1}_{ik} (R^{k-1}_{kk})^* R^{k-1}_{kj} \cup R^{k-1}_{ij}$$
 ```{.prolog file=regex.pl}
 :- table dfa_regex/5.
 
-dfa_regex(DFA, -1, I, J, RE) :-
+dfa_regex(DFA, -1, I, J, Simpl_RE) :-
   nth0(I, DFA.states, QI),
   nth0(J, DFA.states, QJ),
   setof(R, C^(
@@ -397,15 +398,18 @@ dfa_regex(DFA, -1, I, J, RE) :-
   ), RES),
   (I = J ->
     fold_union([regex_empty|RES], RE);
-    fold_union(RES, RE)).
+    fold_union(RES, RE)),
+  simpl_regex(RE,Simpl_RE).
 
-dfa_regex(DFA, K, I, J, regex_union(regex_concat(R_IK, regex_concat(regex_kleene(R_KK), R_KJ)), R_IJ)) :-
+dfa_regex(DFA, K, I, J, RE) :-
   K > -1,
   Pred_K is K - 1,
   dfa_regex(DFA, Pred_K, I, K, R_IK),
   dfa_regex(DFA, Pred_K, K, K, R_KK),
   dfa_regex(DFA, Pred_K, K, J, R_KJ),
-  dfa_regex(DFA, Pred_K, I, J, R_IJ).
+  dfa_regex(DFA, Pred_K, I, J, R_IJ),
+  simpl_regex(regex_union(regex_concat(R_IK, regex_concat(regex_kleene(R_KK), R_KJ)), R_IJ), RE).
+
 ```
 
 The above predicate alone is not enough to convert an NFA to a DFA. The
@@ -431,19 +435,76 @@ dfa_regex(DFA, Regex) :-
 
 fold_union(Regex_List, Union) :-
   foldl([V0, E, V1]>>(V1=regex_union(V0, E)), Regex_List, regex_null, Union).
+```
 
-show_regex(regex_empty) --> `_`.
-show_regex(regex_null) --> `!`.
-show_regex(regex_char(C)) --> {atom_codes(C, S)}, S.
-show_regex(regex_union(L,R)) -->
-  `(`, show_regex(L), `|`, show_regex(R), `)`.
-show_regex(regex_concat(L,R)) -->
-  show_regex(L), show_regex(R).
-show_regex(regex_kleene(K)) -->
-  `(`, show_regex(K), `)*`.
+# Simplifying Regular Expressions
 
-show_regex(Regex, Codes) :-
-  show_regex(Regex, Codes, []).
+The intermediate regular expression generated as part of Kleene's algorithm are
+are extremely redundant and can be simplified significantly. This not only
+provides cleaner output; it also reduces the size of the table used to memoize
+the computation which keeps memory usage reasonable.
+
+```{.prolog file=regex.pl}
+simpl_regex(regex_union(A,B), C) :-
+  simpl_regex(A, C),
+  simpl_regex(B, C),!.
+simpl_regex(regex_concat(E,A), B) :-
+  simpl_regex(E, regex_empty),
+  simpl_regex(A, B),!.
+simpl_regex(regex_concat(A,E), B) :-
+  simpl_regex(E, regex_empty),
+  simpl_regex(A, B),!.
+simpl_regex(regex_union(A,N), B) :-
+  simpl_regex(N, regex_null),
+  simpl_regex(A,B),!.
+simpl_regex(regex_union(N,A), B) :-
+  simpl_regex(N, regex_null),
+  simpl_regex(A,B),!.
+simpl_regex(regex_concat(_,N), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_concat(N,_), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_kleene(E), regex_empty) :-
+  simpl_regex(E, regex_empty),!.
+simpl_regex(regex_kleene(N), regex_null) :-
+  simpl_regex(N, regex_null),!.
+simpl_regex(regex_kleene(K), regex_kleene(L)) :-
+  simpl_regex(K, L).
+simpl_regex(regex_concat(A,B), regex_concat(C,D)) :-
+  simpl_regex(A,C),
+  simpl_regex(B,D).
+simpl_regex(regex_union(A,B), regex_union(C,D)) :-
+  simpl_regex(A,C),
+  simpl_regex(B,D).
+simpl_regex(regex_null, regex_null).
+simpl_regex(regex_empty, regex_empty).
+simpl_regex(regex_char(C), regex_char(C)).
+```
+
+# Printing Regular Expressions
+
+This operation is essentially the inverse of parsing. I would like to be able
+to use the same predicate as used for parsing, but have not been able to get it
+working yet. For the time being, we use a separate predicate. Also note that
+this predicate uses Kleene closure (`*`) instead of the non-zero quantifier
+(`+`) used when parsing.
+
+```{.prolog file=regex.pl}
+show_regex(regex_char(0), `0`).
+show_regex(regex_char(1), `1`).
+show_regex(regex_empty, `_`).
+show_regex(regex_null, `!`).
+show_regex(regex_union(L,R), S) :-
+  show_regex(L, SL),
+  show_regex(R, SR),
+  append([SL, SR, `|`], S).
+show_regex(regex_concat(L,R), S) :-
+  show_regex(L, SL),
+  show_regex(R, SR),
+  append([SL, SR, `;`], S).
+show_regex(regex_kleene(K), S) :-
+  show_regex(K, SK),
+  append(SK, `*`, S).
 ```
 
 # Appendix: Graphiz Output
