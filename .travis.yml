@@ -5,7 +5,7 @@ install:
   - rm /tmp/pandoc.deb
 
 script:
-  - pandoc -t html -f markdown -o regex.html regex.md
+  - pandoc -s -t html -f markdown --css=pandoc.css -o index.html regex.md
 
 deploy:
   provider: pages
