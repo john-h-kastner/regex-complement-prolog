@@ -1,0 +1,16 @@
+install:
+  - curl -fLo /tmp/pandoc.deb https://github.com/jgm/pandoc/releases/download/2.9.1.1/pandoc-2.9.1.1-1-amd64.deb
+  - sudo dpkg -i /tmp/pandoc.deb
+  - sudo apt-get install -f
+  - rm /tmp/pandoc.deb
+
+script:
+  - pandoc -t html -f markdown -o regex.html regex.md
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN
+  keep_history: true
+  on:
+    branch: master
