@@ -9,8 +9,9 @@ install:
   - pip install /tmp/filters
 
 script:
-  - pandoc -s -t html -f markdown --css=pandoc.css -o index.html regex.md
-  - pandoc -t plain --filter pandoc-tangle regex.md
+  - make regex.html
+  - mv regex.html index.html
+  - make regex.pl
 
 deploy:
   provider: pages
