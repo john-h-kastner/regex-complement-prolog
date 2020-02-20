@@ -11,6 +11,11 @@ challenge is to take as input a simplified postfix regular expression (regex)
 dialect defined  over the alphabet $\{0,1\}$ and output a new regex that
 matches exactly those strings that were not matched by the original regex.
 
+This file is and annotated version of the code intended to be processed by
+[Pandoc][6] to obtain a nicely formatted document. It can also be processed by
+Pandoc through the [pandoc-tangle][7] filter to obtain executable source code.
+The unannotated source is also [available on github][8].
+
 The approach we will use is as follows:
 
 1. Parse the string representation of regex into an abstract syntax tree.
@@ -573,3 +578,6 @@ graphviz_display(NFA) :-
 [3]: https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton#Formal_definition
 [4]: https://en.wikipedia.org/wiki/Powerset_construction
 [5]: https://en.wikipedia.org/wiki/Kleene%27s_algorithm
+[6]: https://pandoc.org/
+[7]: https://github.com/ehildenb/pandoc-tangle
+[8]: https://github.com/jackastner/regex-complement-prolog/blob/gh-pages/regex.pl
