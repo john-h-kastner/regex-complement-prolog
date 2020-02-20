@@ -25,10 +25,9 @@ The approach we will use is as follows:
 4. Complement the DFA. This is accomplished by complementing the set of
    accepting states.
 5. Convert the resulting DFA into a regular expression.
-6. (Optional) Perform some simplification to obtain a more reasonable expression
 
-This is demonstrated by the following predicate that takes a regular expression
-encoded as a string and generates its complement. The predicates invoked in its
+This is demonstrated by the following predicate which takes a regular expression
+encoded as a string and generates its complement.
 
 ```{.prolog file=regex.pl}
 complement_regex_string(Regex_String, Regex_Comp_String) :-
@@ -37,10 +36,21 @@ complement_regex_string(Regex_String, Regex_Comp_String) :-
   regex_nfa(Regex, NFA),
   nfa_dfa(NFA, DFA),
   dfa_complement(DFA, DFA_Comp),
-  graphviz_display(DFA_Comp),
   dfa_regex(DFA_Comp, Regex_Comp),
   show_regex(Regex_Comp, Regex_Comp_Codes),
   string_codes(Regex_Comp_String, Regex_Comp_Codes).
+```
+
+The predicate can be invoked from the SWI-Prolog top level environment. Testing
+it on simple input yields correct if rather long output. I have not extensively
+validated the conversion on larger inputs.
+
+```{.prolog}
+?- complement_regex_string("0", S).
+S = "010|10_||*10_||;;10||;110_||*10_||;;1||_!||" .
+
+?- complement_regex_string("1", S).
+S = "110|10_||*10_||;;10||;010_||*10_||;;0||_!||" .
 ```
 
 # Parsing Regular Expressions
