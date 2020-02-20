@@ -88,6 +88,7 @@
 </header>
 <h1 id="introduction">Introduction</h1>
 <p>In this program we attempt to complete the <a href="https://codegolf.stackexchange.com/questions/161108/complement-of-a-regex">“Complement of a Regex”</a> question posted to Code Golf &amp; Coding Challenges using Prolog. Briefly, the challenge is to take as input a simplified postfix regular expression (regex) dialect defined over the alphabet <span class="math inline">{0, 1}</span> and output a new regex that matches exactly those strings that were not matched by the original regex.</p>
+<p>This file is and annotated version of the code intended to be processed by <a href="https://pandoc.org/">Pandoc</a> to obtain a nicely formatted document. It can also be processed by Pandoc through the <a href="https://github.com/ehildenb/pandoc-tangle">pandoc-tangle</a> filter to obtain executable source code. The unannotated source is also <a href="https://github.com/jackastner/regex-complement-prolog/blob/gh-pages/regex.pl">available on github</a>.</p>
 <p>The approach we will use is as follows:</p>
 <ol type="1">
 <li>Parse the string representation of regex into an abstract syntax tree.</li>
