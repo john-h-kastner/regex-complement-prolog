@@ -4,7 +4,6 @@ complement_regex_string(Regex_String, Regex_Comp_String) :-
   regex_nfa(Regex, NFA),
   nfa_dfa(NFA, DFA),
   dfa_complement(DFA, DFA_Comp),
-  graphviz_display(DFA_Comp),
   dfa_regex(DFA_Comp, Regex_Comp),
   show_regex(Regex_Comp, Regex_Comp_Codes),
   string_codes(Regex_Comp_String, Regex_Comp_Codes).
