@@ -18,7 +18,7 @@ The unannotated source is also [available on github][8].
 
 The approach we will use is as follows:
 
-1. Parse the string representation of regex into an abstract syntax tree.
+1. Parse the string representation of the regex into an abstract syntax tree.
 2. Convert the abstract syntax tree of the regex into a non-deterministic
    finite automaton (NFA).
 3. Convert the NFA into a deterministic finite automaton (DFA).
@@ -60,7 +60,7 @@ is easy using Prologs built in syntax for DCGs. We define a predicate
 `parse_regex//2` where the first argument is the current stack of encountered
 regex and the second is the final regex constructed by the parse.
 
-The simplest cases are the single character regex . If we see `0` of `1`, we
+The simplest is a single character regular expression. If we see `0` of `1`, we
 construct a regex for a character literal and push it onto the stack. Matching
 `_` for the empty regex and `!` for the null regex is handled similarly.
 
@@ -97,9 +97,9 @@ parse_regex([R0|RS], R) -->
 
 The final step in parsing is handling the end of the input string. When there
 are no more characters available, we examine the stack to determine if there if
-it contains a single regex . When this is the case, that expression the final
+it contains a single regex . When this is the case, that expression is the final
 parsed expression. If there is more than one regular expression on the stack,
-then the input string was not a well formed postfix regex , so the predicate
+then the input string was not a well formed postfix regular expression, so the predicate
 fails.
 
 ```{.prolog file=regex.pl}
@@ -107,7 +107,7 @@ parse_regex([R],R) --> \+ [_].
 ```
 
 With the DCG defined, we can define and additional predicate `parse_regex/2`
-that invokes the DCG predicate with an initially empty stack and requiring that
+that invokes the DCG predicate with an initially empty stack and requires that
 the entire input string is consumed while parsing.
 
 ```{.prolog file=regex.pl}
@@ -129,12 +129,12 @@ global variable or local variable outside the body of a loop. A global variable
 could be used in Prolog, but it is not desirable. Instead, we can opt for an
 approach similar what would be used in the functional paradigm: a function
 takes as part of its input the current identifier value, and returns with its
-output and additional value for the next available identifier. The problem with
-this approach is that we explicitly thread some state though the program. To
-avoid this overhead, something similar to the state monad in Haskell can be
+output an additional value for the next available identifier. The problem with
+this approach is that we need to explicitly thread some state though the program. To
+avoid this overhead, something similar to the state monad in Haskell migh be
 used.
 
-In Prolog, the state monad is approximated using a DCG. The current identifier
+In Prolog, a similar effect can be obtained by using a DCG. The current identifier
 value is tracked as the first and only element of the list being processed.
 When an identifier is needed, the value is removed from the list, incremented,
 and added back onto the list. The original value can then be used as an
@@ -149,7 +149,7 @@ fresh(S), [T] -->
 To implement the construction, we also need some data structure to represent
 an NFA. Recall that an NFA is [defined by a 5-tuple][3]
 $(Q, \Sigma, \Delta, q_0, f)$: a set of states, an alphabet, a transition
-function, and initial state, and a final state. We are working with a fixed
+function, an initial state, and a final state. We are working with a fixed
 alphabet ($\{0,1\}$), so we will ignore $\Sigma$ and encode the remaining four
 elements in a dictionary defined as follows. Note that the transition function
 is defined by a set of triples rather than a function.
@@ -173,7 +173,7 @@ regex_nfa(regex_empty, NFA) -->
   {NFA = nfa{states: [A], initial: A, final: A, delta: []}}.
 ```
 
-The null regex does not accept any strings, so there should be not way to move
+The null regex does not accept any strings, so there should be not any way to move
 from the initial state to the final state. This is encoded by obtaining two
 state identifiers for the initial and final state while not generating any
 transitions between them.
@@ -239,7 +239,7 @@ regex_nfa(regex_concat(L, R), NFA) -->
    NFA = nfa{states: States, initial: I, final: F, delta: Delta}}.
 ```
 
-As in the previews cases, constructing the NFA for a Kleene closure requires
+As in the previous cases, constructing the NFA for a Kleene closure requires
 first constructing the NFA for a sub-expression. Since a Kleene closure can
 satisfy the regex once, the initial and final states of this NFA should not be
 changed. We will add transitions so that the expression can be satisfied more
@@ -260,7 +260,6 @@ regex_nfa(regex_kleene(K), NFA) -->
    NFA = nfa{states: NFA_K.states, initial: I, final: F, delta: Delta}}.
 ```
 
-
 Since invoking the DCG predicate we have defined requires providing two
 implicit parameters, it is convenient to define an additional predicate
 that can be invoked directly.
@@ -278,7 +277,7 @@ powerset of the states in the NFA. In other words, each state within the DFA is
 some subset of the states of the NFA.
 
 Using this new set of states, we also need to determine what state is the
-initial states, what states are final states are final states, and what
+initial states, what states are final states, and what
 transitions exists between the states.  The new initial state is derived from
 the original initial state by taking the set of all states reachable on
 $\varepsilon$ transitions from the initial states. Finding these reachable
@@ -373,10 +372,9 @@ new_state(States, Delta, New) :-
 
 # Complementing DFA
 
-Moving from the string representation of a regex to a DFA took a quite a bit
-of working when all we set out to do was computing its complement. At this
-point taking the complement is fortunately easy. We simply replace the set 
-of final states with its complement.
+Moving from the string representation of a regex to a DFA took quite a bit
+of work. At this point computing the DFA complement is fortunately easy. We
+simply replace the set of final states with its complement.
 
 ```{.prolog file=regex.pl}
 dfa_complement(DFA, Complement) :-
@@ -590,4 +588,4 @@ graphviz_display(NFA) :-
 [5]: https://en.wikipedia.org/wiki/Kleene%27s_algorithm
 [6]: https://pandoc.org/
 [7]: https://github.com/ehildenb/pandoc-tangle
-[8]: https://github.com/jackastner/regex-complement-prolog/blob/gh-pages/regex.pl
+[8]: https://github.com/john-h-kastner/regex-complement-prolog/blob/gh-pages/regex.pl
