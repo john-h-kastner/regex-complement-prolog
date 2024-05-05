@@ -1,11 +1,14 @@
-regex.pdf: regex.md
-	pandoc -t latex -o regex.pdf regex.md
+all: 
+	build/index.html
 
 regex.pl: regex.md
 	pandoc -t plain --filter pandoc-tangle regex.md
 
-regex.html: regex.md
-	pandoc -s -t html -f markdown --css=pandoc.css -o regex.html regex.md
+build/index.html: regex.md build/
+	pandoc -s -t html -f markdown --css=pandoc.css -o build/index.html regex.md
+
+build/:
+	mkdir -p build
 
 clean:
-	rm -f regex.pl regex.pdf
+	rm -f build
