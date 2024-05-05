@@ -1,20 +1,16 @@
 ---
 title: Complementing Regular Expressions
-author: John Kastner
 ---
 
-# Introduction
-
 In this program we attempt to complete the ["Complement of a Regex"][1]
-question posted to Code Golf & Coding Challenges using Prolog. Briefly, the
-challenge is to take as input a simplified postfix regular expression (regex)
-dialect defined  over the alphabet $\{0,1\}$ and output a new regex that
+question posted to Code Golf & Coding Challenges using Prolog. The
+challenge is to take as input a simplified postfix regular expression
+dialect defined over the alphabet $\{0,1\}$ and output a new regex that
 matches exactly those strings that were not matched by the original regex.
 
-This file is and annotated version of the code intended to be processed by
+This file is an annotated version of the code intended to be processed by
 [Pandoc][6] to obtain a nicely formatted document. It can also be processed by
 Pandoc through the [pandoc-tangle][7] filter to obtain executable source code.
-The unannotated source is also [available on github][8].
 
 The approach we will use is as follows:
 
@@ -22,11 +18,10 @@ The approach we will use is as follows:
 2. Convert the abstract syntax tree of the regex into a non-deterministic
    finite automaton (NFA).
 3. Convert the NFA into a deterministic finite automaton (DFA).
-4. Complement the DFA. This is accomplished by complementing the set of
-   accepting states.
-5. Convert the resulting DFA into a regular expression.
+4. Complement the DFA by complementing the set of accepting states.
+5. Convert the resulting DFA back into a regular expression.
 
-This is demonstrated by the following predicate which takes a regular expression
+We implement this with the following predicate which takes a regular expression
 encoded as a string and generates its complement.
 
 ```{.prolog file=regex.pl}
@@ -55,12 +50,13 @@ S = "110|10_||*10_||;;10||;010_||*10_||;;0||_!||" .
 
 # Parsing Regular Expressions
 
-We first need to construct an abstract syntax tree for a simplified regex. This
-is easy using Prologs built in syntax for DCGs. We define a predicate
-`parse_regex//2` where the first argument is the current stack of encountered
+We first need to construct an abstract syntax tree for the simplified regex.
+This is made easy due to the simplified postfix syntax, but we could just as
+well parse a more traditional regular expressions. We will use Prologs built in syntax for definite clause grammars (DCGs).
+We define a predicate `parse_regex//2` where the first argument is the current stack of encountered
 regex and the second is the final regex constructed by the parse.
 
-The simplest is a single character regular expression. If we see `0` of `1`, we
+The simplest case is a single character regular expression. If we see `0` of `1`, we
 construct a regex for a character literal and push it onto the stack. Matching
 `_` for the empty regex and `!` for the null regex is handled similarly.
 
@@ -74,9 +70,9 @@ parse_regex(RS, R) -->
 
 Handling concatenation and union regex is more complicated because they are
 constructed from previously encountered regex . In both cases, there must be at
-least two regex on the stack. If they are present and `|` is encountered, the
-regex are popped and their union is push back onto the stack before continuing
-the parse. If `;` is encountered, their concatenation is pushed instead.
+least two regex on the stack. When `|` is encountered, two regex are popped
+from stack and their union is push back onto the stack before continuing.
+If `;` is encountered, their concatenation is pushed instead.
 
 ```{.prolog file=regex.pl}
 parse_regex([R0,R1|RS], R) -->
@@ -84,8 +80,8 @@ parse_regex([R0,R1|RS], R) -->
   ";", parse_regex([regex_concat(R1, R0)|RS], R).
 ```
 
-Parsing the `+` quantifier a very similar but, it only requires one regular
-expression on the stack. The regex pushed onto the stack in this case is more
+Parsing the `+` quantifier is very similar, but it only requires one regular
+expression on the stack. The regex pushed onto the stack in this case is
 interesting because we do not include `+` as a regex combinator. It is instead
 defined as the concatenation of a regex with the Kleene closure for the same
 expression (i.e. `RR*`).
@@ -96,11 +92,11 @@ parse_regex([R0|RS], R) -->
 ```
 
 The final step in parsing is handling the end of the input string. When there
-are no more characters available, we examine the stack to determine if there if
-it contains a single regex . When this is the case, that expression is the final
-parsed expression. If there is more than one regular expression on the stack,
-then the input string was not a well formed postfix regular expression, so the predicate
-fails.
+are no more characters available, we examine the stack to determine if
+it contains a single regex, in which case that is the final parsed expression.
+If there is more than one regular expression on the stack,
+then the input string was not a well formed postfix regular expression,
+so the predicate fails.
 
 ```{.prolog file=regex.pl}
 parse_regex([R],R) --> \+ [_].
@@ -118,11 +114,11 @@ parse_regex(S, R) :-
 # Converting Regular Expressions to NFA
 
 We now need to transform the abstract syntax tree of regular expression into a
-NFA which can be done using [Thompson's construction][2]. While we do not use
-the exact same construction, the intuition is identical. 
+NFA using approximately [Thompson's construction][2]. While we do not use
+the exact same construction, the intuition is the same.
 
-Before implementing the construction, we need a way to obtain unique
-identifiers for states in the NFA. We can do this by assigning the first state
+Before implementing the construction, we need to obtain unique
+identifiers for states in the NFA. We do this by assigning the first state
 to be `0` and incrementing the identifier for each subsequent state. In an
 imperative language, the current value of the identifier might be tracked in a
 global variable or local variable outside the body of a loop. A global variable
@@ -131,13 +127,13 @@ approach similar what would be used in the functional paradigm: a function
 takes as part of its input the current identifier value, and returns with its
 output an additional value for the next available identifier. The problem with
 this approach is that we need to explicitly thread some state though the program. To
-avoid this overhead, something similar to the state monad in Haskell migh be
+avoid this overhead, something similar to the state monad in Haskell might be
 used.
 
 In Prolog, a similar effect can be obtained by using a DCG. The current identifier
 value is tracked as the first and only element of the list being processed.
 When an identifier is needed, the value is removed from the list, incremented,
-and added back onto the list. The original value can then be used as an
+and added back onto the list. The original value is then be used as a fresh
 identifier. The DCG predicate `fresh//1` handles the list updates and unifies
 its argument with the available identifier value.
 
@@ -146,8 +142,7 @@ fresh(S), [T] -->
   [S], {T is S + 1}.
 ```
 
-To implement the construction, we also need some data structure to represent
-an NFA. Recall that an NFA is [defined by a 5-tuple][3]
+We also need some data structure to represent an NFA. An NFA is [defined by a 5-tuple][3]
 $(Q, \Sigma, \Delta, q_0, f)$: a set of states, an alphabet, a transition
 function, an initial state, and a final state. We are working with a fixed
 alphabet ($\{0,1\}$), so we will ignore $\Sigma$ and encode the remaining four
@@ -162,10 +157,9 @@ is_delta(__From-__Char-__To).
 ```
 
 The two simplest regular expressions are the empty regular expression and the
-null regular expression. NFA constructed for the empty regular expression is
+null regular expression. The NFA constructed for the empty regular expression is
 an NFA with exactly one state that is both the initial and the final state
-(no transitions are required). An identifier for this state is obtained by
-unifying `A` in `fresh//1`.
+(no transitions are required).
 
 ```{.prolog file=regex.pl}
 regex_nfa(regex_empty, NFA) -->
@@ -175,8 +169,8 @@ regex_nfa(regex_empty, NFA) -->
 
 The null regex does not accept any strings, so there should be not any way to move
 from the initial state to the final state. This is encoded by obtaining two
-state identifiers for the initial and final state while not generating any
-transitions between them.
+state identifiers for the initial and final state without generating any
+transitions.
 
 ```{.prolog file=regex.pl}
 regex_nfa(regex_null, NFA) -->
@@ -184,9 +178,8 @@ regex_nfa(regex_null, NFA) -->
   {NFA = nfa{states: [A, B], initial: A, final: B, delta: []}}.
 ```
 
-A character literal regex follows very directly from this. Instead of there
-being no path from `A` to `B`, there should be single path that requires
-transitioning on the character in question.
+A character literal regex follows directly from this. Instead of no path from `A` to `B`,
+there should be single path that requires transitioning on the character in question.
 
 ```{.prolog file=regex.pl}
 regex_nfa(regex_char(C), NFA) -->
@@ -194,13 +187,13 @@ regex_nfa(regex_char(C), NFA) -->
   {NFA = nfa{states: [A, B], initial: A, final: B, delta: [A-C-B]}}.
 ```
 
-The following three cases are somewhat more complicate since they require
+The following three cases are somewhat more complicated since they require
 integrating one or more existing NFA into a new NFA. In all cases we first
-obtain NFA for the sub-expressions for the input regular expression with 
+obtain NFA for sub-expressions of the input regular expression with
 recursive calls to `regex_nfa//2`.
 
 To construct the NFA for a union of two regular expression, we need to
-construct the union of the sub-expressions NFA. To do this, we first obtain
+construct the union of the sub-expressions NFA. We first obtain
 two fresh states for the resulting NFA: one for the initial state (`I`) and one
 for the final state (`F`). Transitions are then required between the new states
 and the existing NFA. From the initial state, there must be a transitions on
@@ -239,8 +232,8 @@ regex_nfa(regex_concat(L, R), NFA) -->
    NFA = nfa{states: States, initial: I, final: F, delta: Delta}}.
 ```
 
-As in the previous cases, constructing the NFA for a Kleene closure requires
-first constructing the NFA for a sub-expression. Since a Kleene closure can
+Constructing the NFA for a Kleene closure again requires
+constructing the NFA for the sub-expression. Since a Kleene closure can
 satisfy the regex once, the initial and final states of this NFA should not be
 changed. We will add transitions so that the expression can be satisfied more
 than one time or zero times. Satisfying the expression zero times is the same
@@ -273,16 +266,14 @@ regex_nfa(Regex, NFA) :-
 We use the usual [powerset construction][4] to convert NFA to DFA. The exact
 implementation is modified to only construct reachable states. The premise of
 the powerset construction is that the set of states in the constructed DFA is
-powerset of the states in the NFA. In other words, each state within the DFA is
+the powerset of the states in the NFA. In other words, each state within the DFA is
 some subset of the states of the NFA.
 
-Using this new set of states, we also need to determine what state is the
-initial states, what states are final states, and what
-transitions exists between the states.  The new initial state is derived from
+From this new set of states, the new initial state is derived from
 the original initial state by taking the set of all states reachable on
 $\varepsilon$ transitions from the initial states. Finding these reachable
 states for an arbitrary starting state is called the $\varepsilon$ closure of
-the state.  From this initial state, we can find the set of states reachable
+the state.  From this initial state, we find the set of states reachable
 after any number of transitions. This is the set of states in the constructed
 DFA.  The set of final states contains every state in the set of reachable
 states that contains the final state of the original NFA.  Finally, we need the
@@ -389,9 +380,9 @@ dfa_complement(DFA, Complement) :-
 
 # Converting DFA to Regular Expressions
 
-We convert a complemented DFA into a regular expression using 
+We convert a complemented DFA into a regular expression using
 [Kleene's Algorithm][5] which is briefly given by the  following recursive
-relation which is implemented by `dfa_regex/4`.
+relation and implemented by `dfa_regex/4`.
 
 $$R^{-1}_{ij} = \{\varepsilon \mid i = j\} \cup \bigcup \{\sigma \mid q_j \in \delta(q_i, \sigma) \land \sigma \in \Sigma\}$$
 $$R^k_{ij} = R^{k-1}_{ik} (R^{k-1}_{kk})^* R^{k-1}_{kj} \cup R^{k-1}_{ij}$$
