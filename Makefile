@@ -1,5 +1,4 @@
-all: 
-	build/index.html
+all: build/index.html
 
 regex.pl: regex.md
 	pandoc -t plain --filter pandoc-tangle regex.md
